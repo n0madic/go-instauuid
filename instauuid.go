@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -25,7 +25,6 @@ type Generator struct {
 	lastTimestamp int64
 	sequence      uint32
 	shardID       uint32
-	mu            sync.Mutex
 }
 
 // NewGenerator initializes a new Generator with a given shard ID and epoch
@@ -33,54 +32,40 @@ func NewGenerator(shardID uint32, epoch int64) *Generator {
 	if shardID > maxShard {
 		panic(fmt.Sprintf("Shard ID exceeds the maximum allowed value: %d", maxShard))
 	}
-
 	if epoch == 0 {
 		epoch = instagramEpoch
 	}
-
-	g := &Generator{
-		epoch:         epoch,
-		lastTimestamp: 0,
-		sequence:      0,
-		shardID:       shardID,
+	return &Generator{
+		epoch:   epoch,
+		shardID: shardID,
 	}
-	return g
 }
 
-// GenerateID generates the next unique ID based on timestamp, shard ID, and sequence
+// GenerateID returns a new unique ID
 func (g *Generator) GenerateID() uint64 {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	timestamp := time.Now().UnixMilli() - g.epoch
-
-	if timestamp == g.lastTimestamp {
-		g.sequence = (g.sequence + 1) & maxSeq
-		if g.sequence == 0 {
-			timestamp = g.waitNextMillis(timestamp)
+	for {
+		timestamp := time.Now().UnixMilli() - g.epoch
+		lastTimestamp := atomic.LoadInt64(&g.lastTimestamp)
+		if timestamp == lastTimestamp {
+			seq := atomic.AddUint32(&g.sequence, 1) & maxSeq
+			if seq == 0 {
+				continue // Wait for the next millisecond
+			}
+			return g.assembleID(uint64(timestamp), seq)
 		}
-	} else if timestamp > g.lastTimestamp {
-		g.sequence = 0
-	} else {
-		timestamp = g.waitNextMillis(g.lastTimestamp)
+		if timestamp > lastTimestamp {
+			atomic.StoreInt64(&g.lastTimestamp, timestamp)
+			atomic.StoreUint32(&g.sequence, 0)
+			return g.assembleID(uint64(timestamp), 0)
+		}
+		// If we're here, timestamp < lastTimestamp. This should be rare.
+		time.Sleep(time.Millisecond)
 	}
-
-	g.lastTimestamp = timestamp
-
-	id := (uint64(timestamp) << timeShift) |
-		(uint64(g.shardID) << shardShift) |
-		uint64(g.sequence)
-
-	return id
 }
-
-func (g *Generator) waitNextMillis(lastTimestamp int64) int64 {
-	timestamp := time.Now().UnixMilli() - g.epoch
-	for timestamp <= lastTimestamp {
-		time.Sleep(100 * time.Microsecond)
-		timestamp = time.Now().UnixMilli() - g.epoch
-	}
-	return timestamp
+func (g *Generator) assembleID(timestamp uint64, seq uint32) uint64 {
+	return (timestamp << timeShift) |
+		(uint64(g.shardID) << shardShift) |
+		uint64(seq)
 }
 
 // GenerateBase64 generates a Base64 encoded ID

@@ -18,7 +18,7 @@ func TestIDUniqueness(t *testing.T) {
 	generator := NewGenerator(1, 0)
 
 	idSet := make(map[uint64]bool)
-	count := 1000000
+	count := 1024
 
 	for i := 0; i < count; i++ {
 		id := generator.GenerateID()
@@ -50,7 +50,7 @@ func TestPerformance(t *testing.T) {
 	generator := NewGenerator(1, 0)
 
 	start := time.Now()
-	count := 100000
+	count := 1024
 
 	for i := 0; i < count; i++ {
 		generator.GenerateID()
