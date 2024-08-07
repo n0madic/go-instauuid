@@ -31,9 +31,9 @@ import (
 )
 
 func main() {
-    shardID := 1
-    myEpoch := 1609459200
-    generator := instauuid.NewGenerator(shardID, myEpoch)
+	shardID := 1
+	myEpoch := 1609459200
+	generator := instauuid.NewGenerator(shardID, myEpoch)
 	fmt.Println("ID:", generator.GenerateID())
 	fmt.Println("Base64:", generator.GenerateBase64())
 	fmt.Println("Hex:", generator.GenerateHex())
