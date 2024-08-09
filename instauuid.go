@@ -24,8 +24,10 @@ type Generator struct {
 	epoch         int64
 	lastTimestamp int64
 	sequence      uint32
-	shardID       uint32
+	shardID       uint64
 }
+
+var base64Encoding = base64.RawURLEncoding
 
 // NewGenerator initializes a new Generator with a given shard ID and epoch
 func NewGenerator(shardID uint32, epoch int64) *Generator {
@@ -37,7 +39,7 @@ func NewGenerator(shardID uint32, epoch int64) *Generator {
 	}
 	return &Generator{
 		epoch:   epoch,
-		shardID: shardID,
+		shardID: uint64(shardID) << shardShift, // Pre-shift shardID
 	}
 }
 
@@ -51,21 +53,17 @@ func (g *Generator) GenerateID() uint64 {
 			if seq == 0 {
 				continue // Wait for the next millisecond
 			}
-			return g.assembleID(uint64(timestamp), seq)
+			return uint64(timestamp)<<timeShift | g.shardID | uint64(seq)
 		}
+
 		if timestamp > lastTimestamp {
 			atomic.StoreInt64(&g.lastTimestamp, timestamp)
 			atomic.StoreUint32(&g.sequence, 0)
-			return g.assembleID(uint64(timestamp), 0)
+			return uint64(timestamp)<<timeShift | g.shardID
 		}
-		// If we're here, timestamp < lastTimestamp. This should be rare.
-		time.Sleep(time.Millisecond)
+
+		time.Sleep(time.Microsecond)
 	}
-}
-func (g *Generator) assembleID(timestamp uint64, seq uint32) uint64 {
-	return (timestamp << timeShift) |
-		(uint64(g.shardID) << shardShift) |
-		uint64(seq)
 }
 
 // GenerateBase64 generates a Base64 encoded ID
@@ -73,7 +71,7 @@ func (g *Generator) GenerateBase64() string {
 	id := g.GenerateID()
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, id)
-	return base64.RawURLEncoding.EncodeToString(buf)
+	return base64Encoding.EncodeToString(buf)
 }
 
 // GenerateHex generates a hexadecimal string ID
