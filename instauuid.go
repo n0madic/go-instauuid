@@ -48,6 +48,7 @@ func (g *Generator) GenerateID() uint64 {
 	for {
 		timestamp := time.Now().UnixMilli() - g.epoch
 		lastTimestamp := atomic.LoadInt64(&g.lastTimestamp)
+
 		if timestamp == lastTimestamp {
 			seq := atomic.AddUint32(&g.sequence, 1) & maxSeq
 			if seq == 0 {
@@ -77,23 +78,19 @@ func (g *Generator) GenerateBase64() string {
 // GenerateHex generates a hexadecimal string ID
 func (g *Generator) GenerateHex() string {
 	id := g.GenerateID()
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, id)
-	return hex.EncodeToString(buf)
+	return hex.EncodeToString(binary.BigEndian.AppendUint64(nil, id))
 }
 
 // GenerateBuffer generates a byte buffer ID (Little Endian)
 func (g *Generator) GenerateBuffer() []byte {
-	id := g.GenerateID()
 	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, id)
+	binary.LittleEndian.PutUint64(buf, g.GenerateID())
 	return buf
 }
 
 // GenerateBufferBE generates a byte buffer ID (Big Endian)
 func (g *Generator) GenerateBufferBE() []byte {
-	id := g.GenerateID()
 	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, id)
+	binary.BigEndian.PutUint64(buf, g.GenerateID())
 	return buf
 }
